@@ -2,6 +2,11 @@ class CalcController{
 
     constructor(){
         //construtor da calculadora
+
+        this._audio = new Audio('click.mp3');
+        this._audioOnOff = false;
+        this._lastOperator = '';
+        this._lastNumber ='';
         this._operation = [];
         this._locale = 'pt-BR';
         this._displayCalcEl =  document.querySelector("#display");
@@ -10,7 +15,43 @@ class CalcController{
         this._currentDate;
         this.initialize();
         this.initButtonsEvents();
+        this.initKeyBoard();
+        
 
+    }
+
+    copyToClipboard(){
+        //metodo que copia dados do display para a area de transferencia
+
+        let input = document.createElement('input'); //cria um elemento input no html e armazena na variavel
+
+        input.value = this.displayCalc; //armazena o valor do display no valor da variavel
+
+        document.body.appendChild(input); //appenda no corpo do documento html
+
+        input.select(); // seleciona o valor no corpo do documento html
+
+        document.execCommand("Copy"); //copia para area de transferencia
+
+        input.remove(); //remove o campo
+
+
+    }
+
+    pasteFromClipboard(){
+        //metodo que cola no display informações da area de transferência
+        
+        document.addEventListener('paste', e=>{
+            //rastreando o evento colar
+            
+            let text = e.clipboardData.getData('Text'); //armazenando os dados da area de transferência na variavel
+
+            this.displayCalc = parseFloat(text); //convertendo em texto e colando no display (NaN se for texto)
+
+            
+
+
+        });
     }
 
     initialize(){
@@ -25,6 +66,85 @@ class CalcController{
         }, 1000);
 
         this.setLastNumberToDisplay();
+        this.pasteFromClipboard();
+
+        document.querySelectorAll('.btn-ac').forEach(btn => {
+
+            btn.addEventListener('dblclick', e=>{
+
+                this.toggleAudio();
+            })
+        })
+    }
+
+    toggleAudio(){
+        //metodo que verifica se o audio esta ligado ou desligado
+
+        this._audioOnOff = !this._audioOnOff;
+
+    }
+
+    playAudio(){
+        //metodo que toca o audio se estiver ligado
+        if (this._audioOnOff) {
+            this._audio.currentTime = 0;
+            this._audio.play();
+        }
+    }
+
+    initKeyBoard(){
+
+        document.addEventListener('keyup', e=> {
+
+            this.playAudio();
+            switch (e.key) {
+                case 'Escape':
+                    this.clearAll();
+                    break;
+                case 'Backspace':
+                    this.clearEntry();
+                    break;
+                case '+':
+                case '-':
+                case '/':
+                case '*':
+                case '%':
+                    this.addOperation(e.key);
+                    break;
+                    
+               
+                
+                case 'Enter':
+                case '=':
+                    this.calc();
+                    
+                    break;
+        
+                case '.':
+                case ',':
+                    this.addDot('.'); 
+                    break;
+        
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    this.addOperation(parseInt(e.key));
+                    
+                    break;
+                case 'c':
+                    if (e.ctrlKey) this.copyToClipboard();
+                    break;
+        
+            }
+        });
+
     }
 
     addEventListenerAll(element, events, fn){
@@ -38,6 +158,8 @@ class CalcController{
     clearAll(){
         //metodo que zera a memoria da calculadora
         this._operation = [];
+        this._lastNumber = '';
+        this._lastOperator = '';
         this.setLastNumberToDisplay(); //atualiza o display para o ultimo valor digitado
 
     }
@@ -87,10 +209,26 @@ class CalcController{
                 
             }
     } 
+
+    getResult(){
+
+        try{
+        return eval(this._operation.join(""));
+        } catch(e){
+            setTimeout(()=>{
+                this.setError();
+            }, 0);
+            
+        }
+
+        
+    }
     
 
     calc(){
         //metodo que avalia as expressões da calculadora, gerando resultado para cada par de operação.
+
+        this._lastOperator = this.getLastItem(true); //armazena o ultimo operador
 
         if (this._operation[this._operation.length-1] == '%' && this._operation.length <= 2){
             //avalia se foi digitado % como primeiro operador
@@ -104,14 +242,28 @@ class CalcController{
 
         let last = '';
 
+        if (this._operation.length < 3){
+
+            let firstItem = this._operation[0];
+            this._operation = [firstItem, this._lastOperator, this._lastNumber];
+        }
+
         if (this._operation.length >3){
             //avalia se o array possui mais de 3 elementos
 
             last = this._operation.pop(); //retira o ultimo valor digitado do array e armazena na variavel
+            this._lastNumber = this.getResult(); //armazena o ultimo numero
+            
+        } else if (this._operation.length == 3){
 
+            
+            this._lastNumber = this.getLastItem(false); //armazena o ultimo numero
+            
         }
 
-        let result = eval(this._operation.join("")); //avalia o par de operação e armazena o resultado
+        
+
+        let result = this.getResult(); //avalia o par de operação e armazena o resultado
         
 
         if (last == '%'){
@@ -148,18 +300,35 @@ class CalcController{
 
     }
 
-    setLastNumberToDisplay(){
-        //metodo que atualiza o display com o ultimo numero do array
-        let lastNumber;
+    getLastItem(isOperator = true){
+        //metodo que retorna o ultimo item do array
+        let lastItem;
 
         for (let i = this._operation.length-1; i >= 0; i--){
-            //percorre o array procurando o ultimo numero
-            if (!this.isOperator(this._operation[i])){
+            //percorre o array procurando o ultimo item
 
-                lastNumber = this._operation[i]; //armazena o ultimo numero encontrado na variavel
+            if (this.isOperator(this._operation[i]) == isOperator){
+
+                lastItem = this._operation[i]; //armazena o ultimo item encontrado na variavel
                 break;
             }
         }
+
+        if (!lastItem) {
+            //avalia se não existe lastItem e retorna a que estava na memória
+
+            lastItem = (isOperator) ? this._lastOperator : this._lastNumber
+        }
+
+        return lastItem;
+
+    }
+
+    setLastNumberToDisplay(){
+        //metodo que retorna o ultimo numero do array
+
+        let lastNumber = this.getLastItem(false); //invoca metodo que busca ultimo item, passando parametro false para procurar numero
+
 
         if (!lastNumber) lastNumber = 0; //se nao existe ultimo numero, é declarado 0
 
@@ -181,12 +350,7 @@ class CalcController{
                 this.setLastOperation(value);
                 
                                                 
-            } else if(isNaN(value)){
-
-                //Outra coisa
-                
-                console.log('Outra coisa', value);
-            }
+            } 
 
             else{
                 //se não é operator, invoca o metodo que insere no array e atualiza o display (pode ser o 'igual')       
@@ -208,6 +372,7 @@ class CalcController{
                 this.pushOperation(value);
                 let operador = this._operation[this._operation.length-1];
                 if (operador == '%' && this._operation.length==2){
+                    //avalia se o % foi o segundo item digitado e chama o metodo calc
                     
                     this.calc();
                     
@@ -217,9 +382,9 @@ class CalcController{
             }
 
             else{
-                let newValue = this.getLastOPeration().toString() + value.toString();
-                this.setLastOperation(parseInt(newValue));
-                this.setLastNumberToDisplay();
+                let newValue = this.getLastOPeration().toString() + value.toString(); //concatena os números como string
+                this.setLastOperation(newValue); //atribui o valor concatenado para a ultima operação
+                this.setLastNumberToDisplay(); //atualiza o display
                 
             }
 
@@ -232,10 +397,39 @@ class CalcController{
     }
 
     setError(){
-        this.displayCalc = "Error";
+        //metodo que atribui mensagem de erro para o display
+
+        this.displayCalc = "Error"; 
+    }
+
+    addDot(){
+        //metodo para adicionar ponto nos números
+
+        let lastOperation = this.getLastOPeration(); //armazena a última operação
+
+        if (typeof lastOperation === 'string' && lastOperation.split('').indexOf('.') > -1) return;
+        
+        if (this.isOperator(lastOperation) || !lastOperation){
+            //verifica se a ultima operação é um operador ou é a primeira interação do usuário
+
+            this.pushOperation('0.'); //adiciona 0. em ambos os casos
+        } else {
+            //verifica se o usuário está digitando um número maior que zero 'como float'
+
+            this.setLastOperation(lastOperation.toString() + '.'); //concatena e adiciona o ponto para a operação
+
+
+        }
+
+        this.setLastNumberToDisplay(); //atualiza o display
+        
+        
+
     }
 
     execBtn(value){
+
+        this.playAudio();
 
         switch (value) {
             case 'ac':
@@ -270,7 +464,7 @@ class CalcController{
                 break;
     
             case 'ponto':
-                this.addOperation('.'); 
+                this.addDot('.'); 
                 break;
     
             case '0':
@@ -351,8 +545,13 @@ class CalcController{
         return this._displayCalcEl.innerHTML;
     }
 
-    set displayCalc(valor){
-        this._displayCalcEl.innerHTML = valor;
+    set displayCalc(value){
+
+        if (value.toString().length > 10){
+            this.setError();
+            return false;
+        }
+        this._displayCalcEl.innerHTML = value;
     }
 
     get currentDate(){
